@@ -1,0 +1,126 @@
+# Graylog 6.x + MongoDB + OpenSearch (self-managed)
+# Tuned for local dev / student demos (lower OpenSearch heap).
+# Docs: https://go2docs.graylog.org/current/downloading_and_installing_graylog/docker_installation_os.htm
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: on-failure
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-diy_siem}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-diy_siem}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    networks:
+      - graylog
+
+  mongodb:
+    image: mongo:6.0.18
+    restart: on-failure
+    networks:
+      - graylog
+    volumes:
+      - mongodb_data:/data/db
+      - mongodb_config:/data/configdb
+
+  opensearch:
+    image: opensearchproject/opensearch:2.15.0
+    environment:
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+      - "bootstrap.memory_lock=true"
+      - "discovery.type=single-node"
+      - "action.auto_create_index=false"
+      - "plugins.security.ssl.http.enabled=false"
+      - "plugins.security.disabled=true"
+      - "OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OPENSEARCH_INITIAL_ADMIN_PASSWORD:?Set OPENSEARCH_INITIAL_ADMIN_PASSWORD in .env}"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    # OpenSearch is only used inside the Docker network (Graylog connects to opensearch:9200).
+    # Uncomment below if you need curl access from the host for debugging:
+    # ports:
+    #   - "127.0.0.1:9204:9200"
+    restart: on-failure
+    networks:
+      - graylog
+    volumes:
+      - opensearch_data:/usr/share/opensearch/data
+
+  graylog:
+    hostname: server
+    image: graylog/graylog:6.1
+    depends_on:
+      mongodb:
+        condition: service_started
+      opensearch:
+        condition: service_started
+    entrypoint: "/usr/bin/tini -- wait-for-it opensearch:9200 -- /docker-entrypoint.sh"
+    environment:
+      GRAYLOG_NODE_ID_FILE: "/usr/share/graylog/data/config/node-id"
+      GRAYLOG_HTTP_BIND_ADDRESS: "0.0.0.0:9000"
+      GRAYLOG_HTTP_EXTERNAL_URI: "${GRAYLOG_HTTP_EXTERNAL_URI:-http://127.0.0.1:9000/}"
+      GRAYLOG_ELASTICSEARCH_HOSTS: "http://opensearch:9200"
+      GRAYLOG_MONGODB_URI: "mongodb://mongodb:27017/graylog"
+      GRAYLOG_PASSWORD_SECRET: "${GRAYLOG_PASSWORD_SECRET:?Set GRAYLOG_PASSWORD_SECRET in .env (16+ chars)}"
+      GRAYLOG_ROOT_PASSWORD_SHA2: "${GRAYLOG_ROOT_PASSWORD_SHA2:?Set GRAYLOG_ROOT_PASSWORD_SHA2 in .env}"
+      GRAYLOG_REPORT_DISABLE_SANDBOX: "true"
+    ports:
+      - "9000:9000/tcp"
+      - "5044:5044/tcp"
+      - "5140:5140/tcp"
+      - "5140:5140/udp"
+      - "12201:12201/tcp"
+      - "12201:12201/udp"
+      - "5555:5555/tcp"
+      - "5555:5555/udp"
+      - "13301:13301/tcp"
+      - "13302:13302/tcp"
+    restart: on-failure
+    networks:
+      - graylog
+    volumes:
+      - graylog_data:/usr/share/graylog/data
+
+  # Optional: SIEM dashboard without running `python -m diy_siem serve` on the host.
+  # Start with: docker compose --profile dashboard up -d
+  dashboard:
+    profiles: ["dashboard"]
+    build:
+      context: .
+      dockerfile: Dockerfile.dashboard
+    env_file: .env
+    environment:
+      FLASK_HOST: "0.0.0.0"
+      POSTGRES_HOST: postgres
+      GRAYLOG_API_URL: http://graylog:9000
+      # Ollama on the host (Docker Desktop Mac/Windows). Override in `.env` if needed.
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+    ports:
+      - "127.0.0.1:5000:5000/tcp"
+    depends_on:
+      postgres:
+        condition: service_started
+      graylog:
+        condition: service_started
+    restart: on-failure
+    networks:
+      - graylog
+
+networks:
+  graylog:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  mongodb_data:
+  mongodb_config:
+  opensearch_data:
+  graylog_data:

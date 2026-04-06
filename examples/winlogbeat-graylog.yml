@@ -1,0 +1,9 @@
+# Minimal Winlogbeat → Graylog Beats input (TCP 5044).
+# Install Winlogbeat on Windows; point hosts at your Graylog machine.
+# Security channel: failed/success logons (4625/4624) for auth analytics.
+winlogbeat.event_logs:
+  - name: Security
+    ignore_older: 48h
+
+output.logstash:
+  hosts: ["127.0.0.1:5044"]

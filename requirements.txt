@@ -1,0 +1,6 @@
+# Correlation engine + dashboard
+flask>=3.0,<4
+requests>=2.31,<3
+psycopg2-binary>=2.9,<3
+python-dotenv>=1.0,<2
+reportlab>=4.0,<5

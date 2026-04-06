@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>{{ brand_name }} — Alerts</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --primary: #8A1538;
+      --primary-dark: #6d102c;
+      --secondary: #C75A7C;
+      --secondary-light: #e8a4b8;
+      --bg: #F5F5F5;
+      --surface: #FFFFFF;
+      --text: #1f1f1f;
+      --muted: #5c5c5c;
+      --border: rgba(138, 21, 56, 0.12);
+      --accent-soft: rgba(199, 90, 124, 0.18);
+      --warn: #b45309;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 1.25rem 1.5rem 2rem;
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin: 0 0 0.35rem;
+      color: var(--primary);
+      letter-spacing: -0.02em;
+    }
+    .sub { color: var(--muted); font-size: 0.9rem; margin-bottom: 1.25rem; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.1rem 1.15rem;
+      box-shadow: 0 1px 3px rgba(138, 21, 56, 0.06);
+    }
+    .card h2 {
+      font-size: 0.8rem;
+      color: var(--primary);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-weight: 600;
+      margin: 0 0 0.75rem;
+    }
+    .kpi { font-size: 1.85rem; font-weight: 700; color: var(--primary-dark); }
+    .kpi span { color: var(--muted); font-size: 0.85rem; font-weight: 500; }
+    canvas { max-height: 220px; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+    }
+    th, td {
+      text-align: left;
+      padding: 0.65rem 0.5rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    th {
+      color: var(--primary);
+      font-weight: 600;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      background: rgba(138, 21, 56, 0.04);
+    }
+    tr:hover td { background: rgba(199, 90, 124, 0.06); }
+    .severity { font-size: 0.75rem; padding: 0.2rem 0.5rem; border-radius: 6px; display: inline-block; font-weight: 600; }
+    .severity-low { background: rgba(34, 139, 34, 0.15); color: #1d6f1d; }
+    .severity-medium { background: rgba(180, 83, 9, 0.15); color: #92400e; }
+    .severity-high, .severity-critical { background: rgba(138, 21, 56, 0.18); color: var(--primary-dark); }
+    .severity-info { background: var(--accent-soft); color: #9d3d5c; }
+    .ai { color: #7a2d48; max-width: 42rem; white-space: pre-wrap; }
+    .err { color: var(--warn); font-size: 0.8rem; }
+    .muted { color: var(--muted); }
+    .refresh {
+      float: right;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--secondary);
+      cursor: pointer;
+      user-select: none;
+    }
+    .refresh:hover { color: var(--primary); text-decoration: underline; }
+    .actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+    .actions a.pdf-link {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--secondary);
+      text-decoration: none;
+    }
+    .actions a.pdf-link:hover { color: var(--primary); text-decoration: underline; }
+    .brand-header {
+      display: flex;
+      align-items: center;
+      gap: 1.25rem;
+      flex-wrap: wrap;
+      margin-bottom: 1rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .brand-logo {
+      height: 40px;
+      width: auto;
+      max-width: min(100%, 480px);
+      object-fit: contain;
+      display: block;
+    }
+    .brand-text { flex: 1; min-width: 220px; }
+    .brand-text h1 { margin-top: 0; }
+    .brand-text .sub { margin-bottom: 0; }
+    .live-hint {
+      display: block;
+      margin-top: 0.35rem;
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <header class="brand-header">
+    {% if brand_logo_url %}
+    <img
+      src="{{ brand_logo_url }}"
+      alt="Amrita Vishwa Vidyapeetham — Deemed to be University"
+      class="brand-logo"
+      width="480"
+      height="72"
+    />
+
+    {% endif %}
+    
+    <div class="brand-text" align="center">
+      <h1>Amrita SIEM dashboard</h1>
+      <p class="sub">
+        Log correlation + PostgreSQL + local Ollama explanations
+        <span class="actions">
+          <span class="refresh" id="reload" role="button" tabindex="0">Refresh</span>
+          <a class="pdf-link" href="/api/report.pdf" download>Download PDF</a>
+        </span>
+      </p>
+      <span class="live-hint" id="live-hint">Loading…</span>
+
+    </div>
+  </header>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Total alerts</h2>
+      <div class="kpi" id="kpi-total">—</div>
+    </div>
+    <div class="card">
+      <h2>With AI explanation</h2>
+      <div class="kpi" id="kpi-ai">—</div>
+    </div>
+    <div class="card">
+      <h2>By rule</h2>
+      <canvas id="chart-rule" aria-label="Alerts by rule"></canvas>
+    </div>
+    <div class="card">
+      <h2>By severity</h2>
+      <canvas id="chart-sev" aria-label="Alerts by severity"></canvas>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Recent alerts</h2>
+    <div style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th>Time (IST)</th>
+            <th>Rule</th>
+            <th>Severity</th>
+            <th>Summary</th>
+            <th>AI explanation</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    const PALETTE = {
+      primary: '#8A1538',
+      secondary: '#C75A7C',
+      secondaryLight: '#E8A4B8',
+      pinkSoft: '#F2D4DE',
+      deep: '#5A1028',
+      grid: 'rgba(138, 21, 56, 0.08)',
+      tick: '#5c5c5c',
+    };
+
+    let chartRule = null;
+    let chartSev = null;
+    /** Reload chart/table data from Postgres (after `poll` inserts new alerts). */
+    const AUTO_REFRESH_MS = 30_000;
+
+    function setLiveHint(text) {
+      const el = document.getElementById('live-hint');
+      if (el) el.textContent = text;
+    }
+
+    function formatNowIst() {
+      return new Date().toLocaleString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+      }) + ' IST';
+    }
+
+    function sevClass(s) {
+      const x = (s || '').toLowerCase();
+      if (x === 'critical' || x === 'high') return 'severity severity-high';
+      if (x === 'medium') return 'severity severity-medium';
+      if (x === 'low') return 'severity severity-low';
+      if (x === 'info') return 'severity severity-info';
+      return 'severity';
+    }
+
+    /** DB/API times are UTC; show India Standard Time (Asia/Kolkata). */
+    function formatIst(isoOrStr) {
+      if (!isoOrStr) return '—';
+      const d = new Date(String(isoOrStr).trim());
+      if (Number.isNaN(d.getTime())) return String(isoOrStr);
+      return (
+        d.toLocaleString('en-IN', {
+          timeZone: 'Asia/Kolkata',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false,
+        }) + ' IST'
+      );
+    }
+
+    async function load() {
+      const cred = { credentials: 'include' };
+      const [sRes, aRes] = await Promise.all([
+        fetch('/api/stats', cred),
+        fetch('/api/alerts', cred),
+      ]);
+      if (!sRes.ok) throw new Error('stats ' + sRes.status);
+      if (!aRes.ok) throw new Error('alerts ' + aRes.status);
+      const stats = await sRes.json();
+      const alerts = await aRes.json();
+
+      document.getElementById('kpi-total').textContent = stats.total_alerts ?? 0;
+      document.getElementById('kpi-ai').innerHTML =
+        (stats.alerts_with_explanation ?? 0) + ' <span>of ' + (stats.total_alerts ?? 0) + '</span>';
+
+      const rules = stats.by_rule || [];
+      const sevs = stats.by_severity || [];
+
+      const cr = document.getElementById('chart-rule');
+      const cs = document.getElementById('chart-sev');
+      if (chartRule) chartRule.destroy();
+      if (chartSev) chartSev.destroy();
+
+      chartRule = new Chart(cr, {
+        type: 'bar',
+        data: {
+          labels: rules.map(r => r.rule_name),
+          datasets: [{
+            label: 'Count',
+            data: rules.map(r => r.count),
+            backgroundColor: 'rgba(138, 21, 56, 0.75)',
+            borderColor: PALETTE.primary,
+            borderWidth: 1,
+            borderRadius: 6,
+          }],
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { ticks: { color: PALETTE.tick, maxRotation: 45, minRotation: 25 }, grid: { display: false } },
+            y: { ticks: { color: PALETTE.tick, stepSize: 1 }, grid: { color: PALETTE.grid } },
+          },
+        },
+      });
+
+      const doughnutColors = [
+        PALETTE.primary,
+        PALETTE.secondary,
+        PALETTE.secondaryLight,
+        PALETTE.deep,
+        PALETTE.pinkSoft,
+      ];
+
+      chartSev = new Chart(cs, {
+        type: 'doughnut',
+        data: {
+          labels: sevs.map(r => r.severity),
+          datasets: [{
+            data: sevs.map(r => r.count),
+            backgroundColor: sevs.map((_, i) => doughnutColors[i % doughnutColors.length]),
+            borderColor: '#FFFFFF',
+            borderWidth: 3,
+            hoverOffset: 6,
+          }],
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: { color: PALETTE.tick, boxWidth: 12, padding: 12, font: { weight: '500' } },
+            },
+          },
+        },
+      });
+
+      const tb = document.getElementById('tbody');
+      tb.innerHTML = '';
+      for (const a of alerts) {
+        const tr = document.createElement('tr');
+        const t = formatIst(a.created_at);
+        const ai = a.ai_explanation
+          ? '<div class="ai">' + escapeHtml(a.ai_explanation) + '</div><div class="err">' +
+            (a.ai_model ? 'Model: ' + escapeHtml(a.ai_model) : '') + '</div>'
+          : '<span class="muted">—</span>';
+        tr.innerHTML =
+          '<td>' + escapeHtml(t) + '</td>' +
+          '<td>' + escapeHtml(a.rule_name || '') + '</td>' +
+          '<td><span class="' + sevClass(a.severity) + '">' + escapeHtml(a.severity || '') + '</span></td>' +
+          '<td>' + escapeHtml((a.summary || '').slice(0, 200)) + '</td>' +
+          '<td>' + ai + '</td>';
+        tb.appendChild(tr);
+      }
+      setLiveHint(
+        'Auto-refresh every ' + (AUTO_REFRESH_MS / 1000) + 's · Last updated ' + formatNowIst()
+      );
+    }
+
+    function escapeHtml(s) {
+      const d = document.createElement('div');
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    const reloadEl = document.getElementById('reload');
+    reloadEl.addEventListener('click', () => load().catch(err => console.error(err)));
+    reloadEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        load().catch(err => console.error(err));
+      }
+    });
+
+    setInterval(() => {
+      load().catch(() => {});
+    }, AUTO_REFRESH_MS);
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        load().catch(() => {});
+      }
+    });
+
+    load().catch(e => {
+      setLiveHint('Could not load data — is the dashboard server running?');
+      document.getElementById('tbody').innerHTML =
+        '<tr><td colspan="5" class="err">Failed to load API. Is the Flask server running?</td></tr>';
+      console.error(e);
+    });
+  </script>
+</body>
+</html>

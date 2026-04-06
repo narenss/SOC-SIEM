@@ -1,0 +1,8 @@
+# Flask dashboard (optional: docker compose --profile dashboard up -d)
+FROM python:3.12-slim-bookworm
+WORKDIR /app
+ENV PYTHONUNBUFFERED=1
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY diy_siem/ ./diy_siem/
+CMD ["python", "-m", "diy_siem", "serve"]

@@ -1,0 +1,17 @@
+# Minimal Filebeat → Graylog Beats input (TCP 5044). Copy beside filebeat.yml or include with:
+#   filebeat config --path.config /path/to/this/dir
+#
+# On the Graylog host (Docker): use 127.0.0.1:5044. From another machine, use the host IP.
+filebeat.inputs:
+  - type: filestream
+    id: apache-access
+    enabled: true
+    paths:
+      - /var/log/apache2/access.log
+      - /var/log/httpd/access_log
+    fields:
+      log_family: web
+    fields_under_root: true
+
+output.logstash:
+  hosts: ["127.0.0.1:5044"]
